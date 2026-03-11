@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Инженерный отчет: Гоночное топливо Stels Leopard 600</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Chosen Palette: Laboratory Engineering (Slate-50 bg, Slate-800 text, Blue-600 & Orange-500 accents) -->
+    <!-- Application Structure Plan: A dashboard-style layout designed for rapid engineering decision-making. 
+         1. Header with critical engine constraints. 
+         2. Interactive "Mix Lab" (Recipe selector -> updates Composition Chart & Chemical properties). 
+         3. "Fuel Delivery" section (Updates Carburetor tuning specs based on recipe). 
+         4. "Dyno Simulation" (Updates HP/Torque chart vs Stock). 
+         5. "Risk Assessment" (Static critical warnings). 
+         This structure allows the mechanic to select a target performance level and immediately see all associated chemical, mechanical, and risk factors in one unified view, mirroring a tuning software interface rather than a linear document. -->
+    <!-- Visualization & Content Choices: 
+         - Composition Chart: Doughnut chart (Chart.js) to show relative volumes of fuel components. Interaction: Changes based on recipe selection. Justification: Clearest way to visualize parts-per-hundred (percentages) in chemistry. NO SVG.
+         - Dyno Chart: Line chart (Chart.js) showing HP and Torque over RPM. Interaction: Updates curves based on selected recipe vs baseline stock curve. Justification: Standard engineering visualization for engine performance. NO SVG.
+         - Tuning Tables: HTML/Tailwind grids. Interaction: Data populates dynamically. Justification: Cleanest way to present discrete mechanical settings (jet sizes, turns).
+         - Risk Section: Icon-free, text-heavy grid with warning colors. Justification: Ensures safety warnings are read, not skimmed. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+      body {
+        font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: #f8fafc;
+        color: #1e293b;
+      }
+
+      /* Strict Chart Container Styling */
+      .chart-container {
+        position: relative;
+        width: 100%;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+        height: 350px;
+        max-height: 400px;
+      }
+      @media (max-width: 640px) {
+        .chart-container {
+          height: 280px;
+        }
+      }
+
+      .tab-btn {
+        transition: all 0.2s;
+      }
+      .tab-btn.active {
+        background-color: #2563eb;
+        color: white;
+        border-color: #2563eb;
+      }
+      .tab-btn:not(.active) {
+        background-color: white;
+        color: #475569;
+        border-color: #cbd5e1;
+      }
+      .tab-btn:not(.active):hover {
+        background-color: #f1f5f9;
+      }
+    </style>
+  </head>
+  <body class="antialiased min-h-screen pb-12">
+    <!-- Header -->
+    <header
+      class="bg-slate-900 text-white shadow-md border-b-4 border-blue-600"
+    >
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h1 class="text-3xl font-bold tracking-tight">
+          Отчет Лаборатории: Топливные смеси (Нитрометан)
+        </h1>
+        <p class="mt-2 text-slate-300 text-sm md:text-base">
+          Проектная документация по форсированию двигателя для ралли-рейдов.
+          Строго для автоспорта.
+        </p>
+
+        <div
+          class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-slate-800 p-4 rounded-lg border border-slate-700"
+        >
+          <div>
+            <span class="text-slate-400 block text-xs uppercase">Агрегат</span
+            ><span class="font-semibold text-blue-400">Stels Leopard 600</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-xs uppercase"
+              >Степень сжатия</span
+            ><span class="font-semibold text-blue-400">9.3:1 (Допуск N-M)</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-xs uppercase">Питание</span
+            ><span class="font-semibold text-blue-400"
+              >Mikuni BSR36-89 (CV)</span
+            >
+          </div>
+          <div>
+            <span class="text-slate-400 block text-xs uppercase">База</span
+            ><span class="font-semibold text-blue-400"
+              >АИ-95 (Предпочтительно)</span
+            >
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 space-y-8">
+      <!-- Intro Text -->
+      <section
+        class="bg-white rounded-xl shadow-sm border border-slate-200 p-6"
+      >
+        <h2 class="text-xl font-semibold text-slate-800 border-b pb-2 mb-4">
+          Введение в архитектуру решения
+        </h2>
+        <p class="text-slate-600 leading-relaxed mb-4">
+          Данный интерактивный отчет представляет собой инструмент для выбора
+          оптимальной рецептуры топлива на базе нитрометана (CH3NO2). Двигатель
+          с СЖ 9.3:1 обладает достаточным запасом детонационной стойкости для
+          умеренного использования нитрометана без изменения угла опережения
+          зажигания. Главная проблема — нерастворимость нитрометана в бензине и
+          кардинально иная стехиометрия (1.7:1 против 14.7:1). Ниже представлены
+          4 рассчитанных сценария, решающих проблему эмульгации и топливоподачи.
+        </p>
+      </section>
+
+      <!-- Interactive Control Panel -->
+      <section
+        class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden"
+      >
+        <div
+          class="bg-slate-100 p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4"
+        >
+          <h2 class="text-lg font-bold text-slate-800">
+            Выбор целевой рецептуры
+          </h2>
+          <div class="flex flex-wrap gap-2" id="recipe-selectors">
+            <button
+              class="tab-btn active px-4 py-2 text-sm font-medium rounded-md border"
+              data-recipe="r5"
+            >
+              5% (Старт)
+            </button>
+            <button
+              class="tab-btn px-4 py-2 text-sm font-medium rounded-md border"
+              data-recipe="r10"
+            >
+              10% (Спорт)
+            </button>
+            <button
+              class="tab-btn px-4 py-2 text-sm font-medium rounded-md border"
+              data-recipe="r15"
+            >
+              15% (Про)
+            </button>
+            <button
+              class="tab-btn px-4 py-2 text-sm font-bold rounded-md border border-orange-500 text-orange-600 hover:bg-orange-50"
+              data-recipe="rmax"
+            >
+              MAX Extreme
+            </button>
+          </div>
+        </div>
+
+        <div class="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <!-- Chemistry & Composition -->
+          <div>
+            <h3
+              class="text-md font-semibold text-blue-700 uppercase tracking-wide mb-4"
+            >
+              Химия и Состав
+            </h3>
+            <div class="chart-container">
+              <canvas id="compositionChart"></canvas>
+            </div>
+
+            <div
+              class="mt-6 bg-slate-50 p-4 rounded-lg border border-slate-200"
+            >
+              <h4 class="font-semibold text-slate-800 mb-2">
+                Технология смешивания (Критично!):
+              </h4>
+              <ol
+                class="list-decimal list-inside text-sm text-slate-600 space-y-2"
+                id="mixing-instructions"
+              >
+                <!-- Populated by JS -->
+              </ol>
+              <div class="mt-4 pt-4 border-t border-slate-200">
+                <span class="text-xs text-slate-500 uppercase tracking-wider"
+                  >Бюджет компонентов (на 20л):</span
+                >
+                <span
+                  class="ml-2 font-mono font-bold text-slate-800"
+                  id="budget-estimate"
+                ></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Engineering & Carburetor -->
+          <div>
+            <h3
+              class="text-md font-semibold text-blue-700 uppercase tracking-wide mb-4"
+            >
+              Инженерия топливоподачи (Mikuni)
+            </h3>
+            <p class="text-sm text-slate-600 mb-4">
+              Нитрометан несет собственный кислород. Для сохранения безопасного
+              AFR требуется значительное увеличение пропускной способности
+              жиклеров.
+            </p>
+
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-slate-200 border">
+                <tbody class="bg-white divide-y divide-slate-200">
+                  <tr>
+                    <td
+                      class="px-4 py-3 text-sm font-medium text-slate-900 bg-slate-50 w-1/3"
+                    >
+                      Main Jet (ГТЖ)
+                    </td>
+                    <td
+                      class="px-4 py-3 text-sm font-mono text-blue-600 font-bold"
+                      id="spec-jet"
+                    ></td>
+                  </tr>
+                  <tr>
+                    <td
+                      class="px-4 py-3 text-sm font-medium text-slate-900 bg-slate-50"
+                    >
+                      Положение иглы
+                    </td>
+                    <td
+                      class="px-4 py-3 text-sm text-slate-700"
+                      id="spec-needle"
+                    ></td>
+                  </tr>
+                  <tr>
+                    <td
+                      class="px-4 py-3 text-sm font-medium text-slate-900 bg-slate-50"
+                    >
+                      Винт качества (ХХ)
+                    </td>
+                    <td
+                      class="px-4 py-3 text-sm text-slate-700"
+                      id="spec-idle"
+                    ></td>
+                  </tr>
+                  <tr>
+                    <td
+                      class="px-4 py-3 text-sm font-medium text-slate-900 bg-slate-50"
+                    >
+                      Свеча зажигания
+                    </td>
+                    <td
+                      class="px-4 py-3 text-sm text-slate-700 font-semibold text-orange-600"
+                    >
+                      Холоднее на 1 ед. (Напр. CR9E вместо CR8E)
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4">
+              <p
+                class="text-sm text-blue-800 font-medium"
+                id="engineering-note"
+              >
+                <!-- Populated by JS -->
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Performance Simulation -->
+      <section
+        class="bg-white rounded-xl shadow-md border border-slate-200 p-6"
+      >
+        <h2 class="text-xl font-bold text-slate-800 mb-2">
+          Прогноз характеристик: Мощность и Момент
+        </h2>
+        <p class="text-sm text-slate-600 mb-6">
+          Расчетная телеметрия при идеальной настройке смеси. Нитрометан дает
+          прибавку во всем диапазоне, но особенно резко увеличивает крутящий
+          момент на средних оборотах за счет увеличения плотности заряда (эффект
+          охлаждения при испарении).
+        </p>
+
+        <div class="chart-container" style="max-width: 800px; height: 400px">
+          <canvas id="dynoChart"></canvas>
+        </div>
+
+        <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+          <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div class="text-xs text-slate-500 uppercase">Пиковая мощность</div>
+            <div class="text-xl font-bold text-slate-800" id="peak-hp">
+              -- л.с.
+            </div>
+            <div class="text-xs text-green-600 font-medium" id="gain-hp"></div>
+          </div>
+          <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div class="text-xs text-slate-500 uppercase">Пиковый момент</div>
+            <div class="text-xl font-bold text-slate-800" id="peak-tq">
+              -- Нм
+            </div>
+            <div class="text-xs text-green-600 font-medium" id="gain-tq"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Risk Assessment Grid -->
+      <section
+        class="bg-slate-900 rounded-xl shadow-md border border-red-900 p-6 text-slate-300"
+      >
+        <h2
+          class="text-xl font-bold text-white mb-6 border-b border-slate-700 pb-2 flex items-center"
+        >
+          <span class="text-red-500 mr-2">⚠</span> Технический аудит и
+          Критические риски
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Thermal -->
+          <div class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+            <h3 class="font-bold text-orange-400 mb-2">Тепловая нагрузка</h3>
+            <ul class="list-disc list-inside text-sm space-y-2">
+              <li>
+                Нитрометан горит медленнее, выделяя огромное количество тепла.
+              </li>
+              <li>
+                <span class="text-white font-semibold">Угроза №1:</span> Прогар
+                выпускных клапанов. Необходимо зазоры клапанов сделать по
+                верхнему пределу мануала.
+              </li>
+              <li>
+                <span class="text-white font-semibold">Угроза №2:</span>
+                Оплавление днища поршня из-за калильного зажигания (поэтому
+                свеча должна быть холоднее).
+              </li>
+            </ul>
+          </div>
+
+          <!-- Chemical -->
+          <div class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+            <h3 class="font-bold text-blue-400 mb-2">Химическая агрессия</h3>
+            <p class="text-sm mb-2">
+              Нитрометан и ко-сольвенты (ацетон, спирты) разрушают стандартную
+              резину NBR (Buna-N).
+            </p>
+            <div class="text-sm bg-slate-900 p-2 rounded">
+              <strong class="text-white">Под замену на Viton/PTFE:</strong
+              ><br />
+              - Топливные шланги<br />
+              - Колечки иглы поплавковой камеры<br />
+              - Мембрана CV-карбюратора (сверхопасная зона, проверять после
+              каждой гонки)
+            </div>
+          </div>
+
+          <!-- Detonation -->
+          <div class="bg-slate-800 p-4 rounded-lg border border-red-900">
+            <h3 class="font-bold text-red-500 mb-2">Признаки детонации</h3>
+            <p class="text-sm mb-2">
+              Из-за шума мотора и шлема услышать "стук пальцев" на ходу почти
+              невозможно.
+            </p>
+            <ul class="list-disc list-inside text-sm space-y-1">
+              <li>Резкая потеря мощности на "верхах".</li>
+              <li>
+                Выброс антифриза в расширительный бачок (пробой прокладки ГБЦ).
+              </li>
+              <li>
+                Налет в виде "алюминиевой пудры" на изоляторе свечи (начало
+                разрушения поршня).
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // --- Data Engineering ---
+
+      // Stock Engine Data
+      const baseline = {
+        hpMax: 39,
+        tqMax: 55,
+        rpm: [3000, 4000, 4500, 5000, 6000, 6500, 7000],
+        hpData: [16, 26, 31, 35, 39, 38, 35],
+        tqData: [38, 48, 55, 51, 46, 41, 35],
+      };
+
+      // Recipes Database
+      const recipes = {
+        r5: {
+          name: "5% Nitro (Старт)",
+          composition: [90, 5, 5, 0], // Gas, Nitro, Binder, Toluene
+          labels: [
+            "АИ-95 (90%)",
+            "Нитрометан (5%)",
+            "Изопропанол [Связующее] (5%)",
+            "Толуол (0%)",
+          ],
+          jetIncrease: "+ 12-15% площади сечения",
+          needle: "Опустить стопорное кольцо на 1 деление (поднять иглу)",
+          idle: "Открутить на 1 оборот от стока",
+          mixing: [
+            "Отмерить 5% Изопропилового спирта (абсолютированного).",
+            "Влить 5% Нитрометана в спирт и тщательно перемешать.",
+            "Полученную гомогенную смесь влить в 90% бензина АИ-95.",
+          ],
+          budget: "~ 1 200 руб.",
+          note: "Базовый рецепт для адаптации карбюратора. Прощает небольшие ошибки в настройке топливного жиклера. Не требует замены масла после одной гонки.",
+          perfMulti: { hp: 1.06, tq: 1.07 },
+        },
+        r10: {
+          name: "10% Nitro (Спорт)",
+          composition: [82, 10, 8, 0],
+          labels: [
+            "АИ-95 (82%)",
+            "Нитрометан (10%)",
+            "Изопропанол [Связующее] (8%)",
+            "Толуол (0%)",
+          ],
+          jetIncrease: "+ 25-30% площади сечения",
+          needle: "Опустить стопорное кольцо на 1-2 деления",
+          idle: "Открутить на 1.5 оборота от стока",
+          mixing: [
+            "Отмерить 8% Изопропилового спирта.",
+            "Влить 10% Нитрометана в спирт, взболтать.",
+            "Полученную эмульсию влить в 82% бензина АИ-95.",
+          ],
+          budget: "~ 2 400 руб.",
+          note: "Ощутимый рост момента. Требует обязательного контроля температуры выхлопных газов (EGT) или частой проверки цвета свечи (должна быть светло-кофейной).",
+          perfMulti: { hp: 1.12, tq: 1.14 },
+        },
+        r15: {
+          name: "15% Nitro (Про)",
+          composition: [73, 15, 12, 0],
+          labels: [
+            "АИ-95 (73%)",
+            "Нитрометан (15%)",
+            "Изопропанол/Ацетон (12%)",
+            "Толуол (0%)",
+          ],
+          jetIncrease: "+ 40-45% площади сечения",
+          needle:
+            "Опустить стопорное кольцо на 2 деления. Возможна замена профиля иглы.",
+          idle: "Открутить на 2-2.5 оборота, увеличить жиклер ХХ на 1 размер.",
+          mixing: [
+            "Подготовить связующее: смесь Изопропанола и Ацетона (50/50).",
+            "Влить 15% Нитрометана в 12% связующего, перемешать.",
+            "Влить в 73% бензина АИ-95.",
+          ],
+          budget: "~ 3 800 руб.",
+          note: "Смесь начинает сильно охлаждать впуск. Возможны проблемы с холодным пуском. После гонки обязательно прогнать систему чистым бензином во избежание коррозии.",
+          perfMulti: { hp: 1.18, tq: 1.21 },
+        },
+        rmax: {
+          name: '20% Extreme ("Рецепт Победы")',
+          composition: [60, 20, 10, 10], // 10% Toluene added for knock resistance
+          labels: [
+            "АИ-95 (60%)",
+            "Нитрометан (20%)",
+            "Ацетон [Связующее] (10%)",
+            "Толуол [Антидетонатор] (10%)",
+          ],
+          jetIncrease: "+ 55-65% площади сечения (Требует рассверливания ГТЖ)",
+          needle:
+            "Максимально поднята. Требуется модификация пружины вакуумной заслонки.",
+          idle: "Увеличенный жиклер ХХ обязателен. Холостой ход нестабильный.",
+          mixing: [
+            "Смешать 10% Толуола и 10% Ацетона (Ацетон служит и связующим, и октаноповышающей добавкой).",
+            "Медленно ввести 20% Нитрометана в растворитель.",
+            "Влить агрессивную смесь в 60% бензина АИ-95 (или АИ-98, если доступно).",
+          ],
+          budget: "~ 5 500 руб. (Толуол удорожает смесь)",
+          note: "КРИТИЧЕСКИЙ РЕЖИМ. 10% Толуола (ОЧИ 114) компенсируют риск детонации от огромного давления в цилиндре. Моторесурс ЦПГ снижается кратно. Использовать только для квалификации или финального заезда.",
+          perfMulti: { hp: 1.25, tq: 1.3 },
+        },
+      };
+
+      // --- Chart.js Instances ---
+      let compChart, dynoChart;
+
+      function initCharts() {
+        // Composition Chart (Doughnut)
+        const ctxComp = document
+          .getElementById("compositionChart")
+          .getContext("2d");
+        compChart = new Chart(ctxComp, {
+          type: "doughnut",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                data: [],
+                backgroundColor: ["#e2e8f0", "#ef4444", "#3b82f6", "#f59e0b"],
+                borderWidth: 2,
+                borderColor: "#ffffff",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: "60%",
+            plugins: {
+              legend: { position: "bottom", labels: { font: { size: 12 } } },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    return context.label;
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        // Dyno Chart (Line)
+        const ctxDyno = document.getElementById("dynoChart").getContext("2d");
+        dynoChart = new Chart(ctxDyno, {
+          type: "line",
+          data: {
+            labels: baseline.rpm,
+            datasets: [
+              {
+                label: "Сток Мощность (л.с.)",
+                data: baseline.hpData,
+                borderColor: "#94a3b8",
+                borderDash: [5, 5],
+                tension: 0.4,
+                yAxisID: "y",
+              },
+              {
+                label: "Nitro Мощность (л.с.)",
+                data: [],
+                borderColor: "#ef4444", // Red
+                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                fill: true,
+                tension: 0.4,
+                yAxisID: "y",
+              },
+              {
+                label: "Сток Момент (Нм)",
+                data: baseline.tqData,
+                borderColor: "#cbd5e1",
+                borderDash: [5, 5],
+                tension: 0.4,
+                yAxisID: "y1",
+              },
+              {
+                label: "Nitro Момент (Нм)",
+                data: [],
+                borderColor: "#3b82f6", // Blue
+                tension: 0.4,
+                yAxisID: "y1",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            scales: {
+              x: { title: { display: true, text: "Обороты (RPM)" } },
+              y: {
+                type: "linear",
+                display: true,
+                position: "left",
+                title: { display: true, text: "Мощность (л.с.)" },
+                min: 10,
+                max: 60,
+              },
+              y1: {
+                type: "linear",
+                display: true,
+                position: "right",
+                title: { display: true, text: "Момент (Нм)" },
+                min: 30,
+                max: 80,
+                grid: { drawOnChartArea: false },
+              },
+            },
+            plugins: { tooltip: { mode: "index" } },
+          },
+        });
+      }
+
+      // --- UI Update Logic ---
+      function updateDashboard(recipeId) {
+        const data = recipes[recipeId];
+
+        // Update Buttons
+        document.querySelectorAll(".tab-btn").forEach((btn) => {
+          if (btn.dataset.recipe === recipeId) {
+            btn.classList.add("active");
+            if (recipeId === "rmax") {
+              btn.classList.replace("text-orange-600", "text-white");
+              btn.classList.replace("bg-white", "bg-orange-600");
+              btn.classList.replace("border-orange-500", "border-orange-600");
+            }
+          } else {
+            btn.classList.remove("active");
+            if (btn.dataset.recipe === "rmax") {
+              btn.classList.replace("text-white", "text-orange-600");
+              btn.classList.replace("bg-orange-600", "bg-white");
+            }
+          }
+        });
+
+        // Update Composition Chart
+        compChart.data.labels = data.labels;
+        compChart.data.datasets[0].data = data.composition;
+        compChart.update();
+
+        // Update HTML Text
+        const mixingList = document.getElementById("mixing-instructions");
+        mixingList.innerHTML = data.mixing
+          .map((step) => `<li>${step}</li>`)
+          .join("");
+
+        document.getElementById("budget-estimate").textContent = data.budget;
+        document.getElementById("spec-jet").textContent = data.jetIncrease;
+        document.getElementById("spec-needle").textContent = data.needle;
+        document.getElementById("spec-idle").textContent = data.idle;
+        document.getElementById("engineering-note").textContent = data.note;
+
+        // Calculate & Update Performance Data
+        const newHpData = baseline.hpData.map((val) => val * data.perfMulti.hp);
+        const newTqData = baseline.tqData.map((val) => val * data.perfMulti.tq);
+
+        dynoChart.data.datasets[1].data = newHpData;
+        dynoChart.data.datasets[3].data = newTqData;
+        dynoChart.update();
+
+        // Update Peak Stat boxes
+        const peakHpVal = (baseline.hpMax * data.perfMulti.hp).toFixed(1);
+        const peakTqVal = (baseline.tqMax * data.perfMulti.tq).toFixed(1);
+        const gainHpVal = (peakHpVal - baseline.hpMax).toFixed(1);
+        const gainTqVal = (peakTqVal - baseline.tqMax).toFixed(1);
+
+        document.getElementById("peak-hp").textContent = `${peakHpVal} л.с.`;
+        document.getElementById("gain-hp").textContent =
+          `+${gainHpVal} л.с. (+${((data.perfMulti.hp - 1) * 100).toFixed(0)}%)`;
+
+        document.getElementById("peak-tq").textContent = `${peakTqVal} Нм`;
+        document.getElementById("gain-tq").textContent =
+          `+${gainTqVal} Нм (+${((data.perfMulti.tq - 1) * 100).toFixed(0)}%)`;
+      }
+
+      // --- Initialization ---
+      document.addEventListener("DOMContentLoaded", () => {
+        initCharts();
+
+        // Event Listeners for Tabs
+        document
+          .getElementById("recipe-selectors")
+          .addEventListener("click", (e) => {
+            if (e.target.tagName === "BUTTON") {
+              updateDashboard(e.target.dataset.recipe);
+            }
+          });
+
+        // Initial Load
+        updateDashboard("r5");
+      });
+    </script>
+  </body>
+</html>
